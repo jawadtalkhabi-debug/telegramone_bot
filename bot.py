@@ -12,7 +12,6 @@ BROWSERLESS_TOKEN = os.environ.get("BROWSERLESS_TOKEN")
 
 
 def clean_text(text: str) -> str:
-    """حذف کامل لینک‌ها و ارجاعات از متن"""
     text = re.sub(r'!\[[^\]]*\]\([^)]*\)', '', text)
     text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)
     text = re.sub(r'\[\]\([^)]*\)', '', text)
@@ -56,30 +55,11 @@ def fetch_via_archive_today(url: str) -> str:
 
 
 def fetch_via_cloudscraper(url: str) -> str:
-    scraper = cloudscraper.create_scraper(
-        interpreter='hybrid',
-        impersonate='chrome120'
-    )
+    scraper = cloudscraper.create_scraper(interpreter='hybrid', impersonate='chrome120')
     response = scraper.get(url, timeout=60)
     if response.status_code == 200 and len(response.text) > 2000:
         return response.text
     raise Exception("Cloudscraper failed")
-
-
-async def get_screenshot(url: str) -> bytes:
-    api_url = f"{BROWSERLESS_URL}/screenshot?token={BROWSERLESS_TOKEN}"
-    payload = {
-        "url": url,
-        "options": {
-            "fullPage": True,
-            "type": "png"
-        }
-    }
-    response = requests.post(api_url, json=payload, timeout=90)
-    if response.status_code == 200:
-        return response.content
-    else:
-        raise Exception(f"Browserless error: {response.status_code}")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -92,7 +72,6 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     content = None
 
-    # ۱. زنجیره عبور از پی‌وال
     for fetcher in [fetch_via_jina, fetch_via_archive_today, fetch_via_cloudscraper]:
         try:
             raw = fetcher(url)
@@ -103,7 +82,6 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             continue
 
-    # ۲. اگر متن پیدا شد، بفرست
     if content:
         chunk_size = 4000
         chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
@@ -113,17 +91,7 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await asyncio.sleep(1)
         return
 
-    # ۳. اگر همه شکست خوردند، اسکرین‌شات بفرست
-    await update.message.reply_text("متن مسدود شد. در حال گرفتن اسکرین‌شات...")
-    try:
-        image_bytes = await get_screenshot(url)
-        await update.message.reply_document(
-            document=image_bytes,
-            filename="page.png",
-            caption="اسکرین‌شات کامل صفحه"
-        )
-    except Exception as e:
-        await update.message.reply_text(f"خطا در دریافت محتوا: {e}")
+    await update.message.reply_text("متن این صفحه قابل دریافت نیست.")
 
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
